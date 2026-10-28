@@ -1,0 +1,7 @@
+websockets>=14.0
+google-genai>=1.0
+requests>=2.31
+Pillow>=10.0
+jieba>=0.42
+pyobjc-framework-Vision>=12.2; sys_platform == "darwin"
+lunar-python>=1.4.8

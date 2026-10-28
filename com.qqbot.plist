@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.qqbot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPLACE_WITH_ABSOLUTE_PATH_TO_QQ_BOT/.venv/bin/python</string>
+    <string>REPLACE_WITH_ABSOLUTE_PATH_TO_QQ_BOT/main.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>REPLACE_WITH_ABSOLUTE_PATH_TO_QQ_BOT</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>GEMINI_API_KEY</key><string>REPLACE_LOCALLY_WITH_GEMINI_API_KEY</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>REPLACE_WITH_ABSOLUTE_PATH_TO_QQ_BOT/qqbot.out.log</string>
+  <key>StandardErrorPath</key><string>REPLACE_WITH_ABSOLUTE_PATH_TO_QQ_BOT/qqbot.err.log</string>
+</dict>
+</plist>

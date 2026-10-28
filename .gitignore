@@ -1,0 +1,25 @@
+# Secrets and the QQ login: never on GitHub
+config.json
+napcat.env
+napcat_data/
+
+# Chat memories, learned data and corpora: in the private starfall-data repo
+state.json
+learned_style.json
+group_style.json
+vision_cache.json
+gemini_usage.json
+learned_stickers/
+avatars/
+corpus/
+
+# Not uploaded
+backup_before_upgrade_*/
+
+# Leftovers
+.venv/
+__pycache__/
+*.log
+*.tmp
+login_qrcode.png
+.DS_Store
