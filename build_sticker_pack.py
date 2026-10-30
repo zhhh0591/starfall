@@ -16,11 +16,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from google.genai import types  # noqa: E402
 from PIL import Image  # noqa: E402
 import requests  # noqa: E402
 
-from gemini_client import GeminiClient  # noqa: E402
+from gemini_client import Ask, GeminiClient  # noqa: E402
 from media import Vision, prepare_image  # noqa: E402
 from meme_gallery import ALLOWED_IMAGE_HOST  # noqa: E402
 
@@ -65,11 +64,8 @@ async def main():
         if len(images) < 2:
             print(f"{word}: 候选太少，跳过")
             continue
-        response = await gemini._run("vision", "挑表情包", lambda model: (
-            [types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images]
-            + [PROMPT.format(n=len(images), word=word)],
-            gemini._settings(model, temperature=0.2, max_output_tokens=1200)))
-        text = (response.text or "") if response else ""
+        text = await gemini._run("vision", "挑表情包", Ask("", PROMPT.format(n=len(images), word=word), 0.2, 1200,
+                                                          images=tuple(images))) or ""
         match = re.search(r"\[[\s\S]*\]", text)
         try:
             scores = json.loads(match.group(0)) if match else []
