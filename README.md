@@ -125,6 +125,25 @@ NapCat 数据保存在 `napcat_data/`。登录 Mac 后 Colima 会由 LaunchAgent
 - **掉线提醒**：电脑睡着（合盖、电池模式闲置几分钟）时星姐也跟着停；睡得久了 QQ 会被踢下线，NapCat 停在“请扫描二维码”，3001 端口不再应答。现在连不上 NapCat 超过 `offline_alert_seconds`（120 秒）会在这台 Mac 上弹一次通知“星姐掉线了”，日志里也写一行；重连日志前三次每次都写，之后大约一分钟一行，不再每 5 秒刷屏。运行 `./show_login_qr.sh` 会把 NapCat 当前的登录二维码复制出来、放大并打开，用登录着星姐 QQ 号的手机 QQ 扫码确认；二维码大约两分钟一换，过期再运行一次。
 - **备用 Lite 模型**：`reply_models` 加了 `gemini-3.1-flash-lite-preview` 和 `gemini-flash-lite-latest`，Google 那边 3.5/3.1 Flash-Lite 超时或 503 时还有人接；模型返回空回复也算失败，换下一个。2.5 Flash-Lite 对新用户已下线。
 
+## 2026-10-30 第六轮：Gemini 用完了，换别家的免费模型接着聊
+
+- **顺序**：先把 Gemini 那几级（强模型 → Flash-Lite）用完，再按 `fallback_models` 一家家往下：NVIDIA 上的 DeepSeek V4.1 Flash、Kimi K2.6 → Groq 上的千问 Qwen3.8 → NVIDIA 上的 GLM-5.3 Flash → 智谱 GLM-4.7-Flash → Mistral Medium → Groq 上的 gpt-oss-120b → OVH 的千问 Qwen3.8（不用 Key）。看图走 `fallback_vision_models`：Groq 千问 Qwen3.8 → NVIDIA Gemma 4 → 智谱 GLM-4.6V-Flash → OVH Qwen2.5-VL。名单和额度来自 GitHub 上的 [mnfst/awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis)。
+- **写法**：梯子上不带冒号的是 Gemini 模型，`厂商:模型` 是免费厂商（`gemini_client.PROVIDERS`：groq、nvidia、zhipu、mistral、ovh，`providers` 配置可以加别家或改地址）。它们都走 OpenAI 兼容的接口，一份代码接所有家。
+- **Key**：每家的 Key 只从它自己的环境变量读，不写进代码和配置；**没设 Key 的那家自动不上梯子**，OVH 不需要 Key。
+
+  | 厂商 | 环境变量 | 去哪拿（免费、不用绑卡） | 免费额度 |
+  |---|---|---|---|
+  | NVIDIA | `NVIDIA_API_KEY` | build.nvidia.com 登录（加入免费的 NVIDIA 开发者计划）后点 Get API Key | 每个模型每分钟 40 次、每天 1 万次 |
+  | Groq | `GROQ_API_KEY` | console.groq.com/keys | 每个模型每分钟 30 次、每天 1000 次 |
+  | 智谱 | `ZHIPU_API_KEY` | open.bigmodel.cn 的 API Keys 页面（可能要国内手机号） | Flash 模型免费，同时只能一个请求 |
+  | Mistral | `MISTRAL_API_KEY` | console.mistral.ai/api-keys（免费模式，可能要手机验证） | 大约每秒 1 次 |
+  | OVH | 不用 | 不用注册 | 每个模型每分钟 2 次（只当最后的兜底） |
+
+- **额度和出错**：别家每天额度用完（429 写着 per day/RPD、402）先跳过 `provider_daily_block_seconds`（6 小时）；每分钟限额、503 照原来的规矩暂停一会；Key 不对或没开通（401/403）跳过 6 小时，模型下架或改名（404）跳过一天，日志里都会写一行。回答是空的（比如只想不答）也算失败，换下一个。
+- **思考模式**：很多免费模型默认先想再答，想的部分会吃掉回答的字数。所以给每家带上它认的“关掉思考”参数（Groq `reasoning_effort`、NVIDIA `chat_template_kwargs`、智谱 `thinking`）；哪个模型不认这个参数（返回 400），就去掉再试一次，以后都不带（记在 `gemini_usage.json` 的 `plain_models`）。还给它们留至少 `provider_min_tokens`（1500）个输出 token，回答里的 `<think>…</think>` 会被删掉。OVH 不认关思考的参数，千问 Qwen3.5-397B 在 1500 个 token 里想不完，所以 OVH 用 Qwen3.8-27B（大约 15 秒答出来）。
+- **JSON**：要 JSON 的地方（三个角度挑一句、测姻缘、算命、抽签）对别家用 JSON 模式，再在提示词后面附一个按格式生成的样例，告诉它该写成什么样。
+- 日志里的模型名会写成 `groq:qwen/qwen3.8-27b` 这样，`/额度` 也会把别家的用量一起列出来。
+
 ## launchd 模板
 
 `com.qqbot.plist` 是模板，不会自动加载。先在本机把所有 `REPLACE_...` 路径和 Key 占位符填好，建议设为仅本人可读（`chmod 600 com.qqbot.plist`），然后复制到 `~/Library/LaunchAgents/com.qqbot.plist`，运行：

@@ -1363,6 +1363,92 @@ class StickerCollectionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(again.stickers), 1)
 
 
+class FreeProviderTests(unittest.IsolatedAsyncioTestCase):
+    """When Gemini is out, the free OpenAI-compatible providers take over, in ladder order."""
+
+    def make_client(self, handler, **config):
+        import httpx
+        from gemini_client import GeminiClient
+        client = GeminiClient({"reply_models": ["gem-lite"], "text_model": "gem-lite", "utility_model": "gem-lite",
+                               "fallback_models": ["groq:qwen-x", "nvidia:deep-x", "ovh:qwen-big"],
+                               "fallback_vision_models": ["groq:qwen-x"], "gemini_max_attempts": 1,
+                               "gemini_timeout_seconds": 2, "gemini_retry_base_seconds": 0,
+                               "reply_model_timeout_seconds": 2, **config})
+        class Exhausted:
+            async def generate_content(self, model, contents, config):
+                raise RuntimeError("429 RESOURCE_EXHAUSTED GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+        client.client = type("C", (), {"aio": type("A", (), {"models": Exhausted()})()})()
+        client.http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        return client
+
+    async def test_gemini_out_hands_over_to_the_next_provider(self):
+        import httpx
+        seen = []
+        def handler(request):
+            body = json.loads(request.content)
+            seen.append((request.url.host, request.headers.get("authorization"), body))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "<think>想想</think>亲生的"},
+                                                          "finish_reason": "stop"}]})
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
+            os.environ.pop("NVIDIA_API_KEY", None)
+            client = self.make_client(handler)
+            self.assertEqual(client.ladder("reply"), ["gem-lite", "groq:qwen-x", "ovh:qwen-big"])  # no NVIDIA key
+            self.assertEqual(await client.text("你是星姐", "土豆是不是食堂亲儿子"), "亲生的")
+        host, auth, body = seen[0]
+        self.assertEqual((host, auth, body["model"], client.last_model),
+                         ("api.groq.com", "Bearer test-key", "qwen-x", "groq:qwen-x"))
+        self.assertEqual(body["reasoning_effort"], "none")  # thinking off
+        self.assertEqual(body["messages"][0]["role"], "system")
+        self.assertGreaterEqual(body["max_tokens"], 1500)
+        self.assertTrue(client._out_for_today("gem-lite"))
+
+    async def test_refusals_quota_and_empty_answers_move_down_the_ladder(self):
+        import httpx
+        calls = []
+        def handler(request):
+            body = json.loads(request.content)
+            calls.append((request.url.host, sorted(body)))
+            if request.url.host == "api.groq.com":
+                if "reasoning_effort" in body:
+                    return httpx.Response(400, json={"error": {"message": "unknown parameter reasoning_effort"}})
+                return httpx.Response(429, text="Rate limit reached on requests per day (RPD): Limit 1000")
+            if request.url.host == "integrate.api.nvidia.com":
+                return httpx.Response(200, json={"choices": [{"message": {"reasoning": "……", "content": None},
+                                                              "finish_reason": "length"}]})
+            self.assertIsNone(request.headers.get("authorization"))  # OVH needs no key
+            return httpx.Response(200, json={"choices": [{"message": {"content": "在呢"}}]})
+        with patch.dict(os.environ, {"GROQ_API_KEY": "g", "NVIDIA_API_KEY": "n"}, clear=False):
+            client = self.make_client(handler)
+            self.assertEqual(await client.text("你是星姐", "在吗"), "在呢")
+        self.assertEqual([host for host, _ in calls],
+                         ["api.groq.com", "api.groq.com", "integrate.api.nvidia.com", "oai.endpoints.kepler.ai.cloud.ovh.net"])
+        self.assertIn("groq:qwen-x", client.plain_models)  # it refused the thinking switch: never sent again
+        self.assertTrue(client._out_for_today("groq:qwen-x"))
+        self.assertGreater(client.blocked["groq:qwen-x"], time.time() + 3600)
+        from gemini_client import ProviderError, classify_error
+        self.assertEqual(classify_error(ProviderError(401, "invalid api key"))[0], "refused")
+        self.assertEqual(classify_error(ProviderError(429, "slow down", "7")), ("minute", 7.0))
+        self.assertEqual(classify_error(ProviderError(503, "overloaded"))[0], "busy")
+
+    async def test_json_and_pictures_reach_the_providers(self):
+        import httpx
+        from gemini_client import LOVE_SCHEMA, schema_example
+        seen = []
+        def handler(request):
+            seen.append(json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"kind": "天作之合"}'}}]})
+        with patch.dict(os.environ, {"GROQ_API_KEY": "g"}, clear=False):
+            client = self.make_client(handler)
+            await client.text("你是星姐", "测姻缘", schema=LOVE_SCHEMA)
+            await client.vision(b"picture", "image/png", "描述这张图")
+        self.assertEqual(seen[0]["response_format"], {"type": "json_object"})
+        self.assertIn(json.dumps(schema_example(LOVE_SCHEMA), ensure_ascii=False), seen[0]["messages"][-1]["content"])
+        parts = seen[1]["messages"][-1]["content"]
+        self.assertEqual(parts[0], {"type": "text", "text": "描述这张图"})
+        self.assertTrue(parts[1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertEqual(schema_example(LOVE_SCHEMA)["reading"], ["……"])
+
+
 class PictureReadingTests(unittest.IsolatedAsyncioTestCase):
     def test_animations_are_seen_over_several_frames(self):
         from media import prepare_views

@@ -245,5 +245,23 @@
   "fortune_enabled": true,
   "fortune_max_output_tokens": 900,
   "quiet_repeat_minutes": 90,
-  "quiet_max_unanswered": 2
+  "quiet_max_unanswered": 2,
+  "fallback_models": [
+    "nvidia:deepseek-ai/deepseek-v4.1-flash",
+    "nvidia:moonshotai/kimi-k2.6",
+    "groq:qwen/qwen3.8-27b",
+    "nvidia:z-ai/glm-5.3-flash",
+    "zhipu:glm-4.7-flash",
+    "mistral:mistral-medium-latest",
+    "groq:openai/gpt-oss-120b",
+    "ovh:Qwen3.8-27B"
+  ],
+  "fallback_vision_models": [
+    "groq:qwen/qwen3.8-27b",
+    "nvidia:google/gemma-4-31b-it",
+    "zhipu:glm-4.6v-flash",
+    "ovh:Qwen2.5-VL-72B-Instruct"
+  ],
+  "provider_daily_block_seconds": 21600,
+  "provider_min_tokens": 1500
 }

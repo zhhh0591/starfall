@@ -61,5 +61,6 @@ cp -R starfall-data/. qq_bot/        # 把记忆、语料和真实配置放回 q
 还要补三样东西，都不在仓库里：
 
 - **Gemini Key**：在 aistudio.google.com 的 API Keys 页面复制；Mac 上的旧副本只在废纸篓里的 `com.qqbot.plist` 中。
+  - 想让 Gemini 用完后有别家接着聊，再加上这几家的免费 Key（都是可选的，有几个加几个）：`NVIDIA_API_KEY`、`GROQ_API_KEY`、`ZHIPU_API_KEY`、`MISTRAL_API_KEY`。去哪拿见 README 的“第六轮”。
 - **NapCat 令牌**：在树莓派上新生成一个，填进 `config.json` 的 `access_token` 和 NapCat 的设置。
 - **QQ 登录**：扫一次码。
